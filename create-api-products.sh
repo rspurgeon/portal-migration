@@ -11,9 +11,11 @@ print() {
 show_help() {
     print "Usage: $0 -d <directory> -u <url> -t <token>"
     print 
+    print "   -p   Portal ID (Required) to be used for the PATCH operation"
     print "   -d   Directory to read OpenAPI spec files from"
     print "   -u   URL for the API to POST requests to"
     print "   -t   Personal Access Token for authorization"
+
     exit 1
 }
 
@@ -45,12 +47,12 @@ manage_product_version() {
             --header 'Content-Type: application/json' \
             --header 'accept: application/json' \
             --header "Authorization: Bearer ${TOKEN}" \
-            --data "{\"name\":\"$version_name\"}"
-        print "Created new product version: $version_name for product ID: $product_id"
+            --data "{\"name\":\"$version_name\",\"publish_status\":\"published\"}"
         existing_version_id=$(check_version_exists "$product_id" "$version_name")
+        print "Created and published new product version ($version_name) with ID: $existing_version_id for product ID: $product_id"
     else
         # Implement any PATCH operation here if needed
-        print "Version $version_name already exists for product ID: $product_id"
+        print "Version $version_name already exists with ID: $existing_version_id for product ID: $product_id"
     fi
     echo "$existing_version_id"
 }
@@ -91,6 +93,37 @@ update_or_create_specification() {
     fi
 }
 
+patch_api_product_with_portal_id() {
+    local product_id="$1"
+    local portal_id="$2"
+    local url="${URL}/v2/api-products/${product_id}"
+    local payload="{\"portal_ids\": [\"${portal_id}\"]}"
+
+    curl -s -o /dev/null --request PATCH \
+        --url "$url" \
+        --header 'Content-Type: application/json' \
+        --header 'accept: application/json' \
+        --header "Authorization: Bearer ${TOKEN}" \
+        --data "$payload"
+        
+    print "Published API Product ${product_id} to Portal ${portal_id}"
+}
+
+publish_product_version() {
+    local version_id="$1"
+    local url="${URL}/v2/api-products/product-versions/${version_id}"
+    local payload="{\"publish_status\": \"published\"}"
+
+    curl -s -o /dev/null --request PATCH \
+        --url "$url" \
+        --header 'Content-Type: application/json' \
+        --header 'accept: application/json' \
+        --header "Authorization: Bearer ${TOKEN}" \
+        --data "$payload"
+        
+    print "Published API Product Version ${version_id}"
+}
+
 manage_api_product() {
     local payload="$1"
     local product_name=$(echo "$payload" | jq -r ".name")
@@ -105,7 +138,7 @@ manage_api_product() {
             --header 'accept: application/json' \
             --header "Authorization: Bearer ${TOKEN}" \
             --data "$payload"
-        print "Patched existing API Product ${existing_product_id} (${product_name})"
+        print "Patched existing API Product with ID: ${existing_product_id}"
     else
         print "Creating new API Product (${product_name})"
         response=$(curl -s \
@@ -117,18 +150,23 @@ manage_api_product() {
         existing_product_id=$(echo "$response" | jq -r ".id")
         print "Created new API Product with ID: $existing_product_id"
     fi
-    
+
+    patch_api_product_with_portal_id "$existing_product_id" "$PORTAL_ID"
     product_version_id=$(manage_product_version "$existing_product_id" "$product_version")
     update_or_create_specification "$existing_product_id" "$product_version_id"
 }
 
-while getopts "hd:u:t:" opt; do
+
+while getopts "hd:u:t:p:" opt; do
     case "$opt" in
     h)
         show_help
         ;;
     d)
         DIRECTORY=$OPTARG
+        ;;
+    p) # Add this option in the getopts string as well
+        PORTAL_ID=$OPTARG
         ;;
     u)
         URL=$OPTARG
@@ -142,7 +180,7 @@ while getopts "hd:u:t:" opt; do
     esac
 done
 
-if [ -z "$DIRECTORY" ] || [ -z "$URL" ] || [ -z "$TOKEN" ]; then
+if [ -z "$DIRECTORY" ] || [ -z "$URL" ] || [ -z "$TOKEN" ] || [ -z "$PORTAL_ID" ]; then
     show_help
 fi
 
@@ -177,6 +215,9 @@ for file in "$DIRECTORY"/*.{json,yaml,yml}; do
 
         # Start with the base JSON
         json_payload="{\"name\":\"$title\""
+
+        # Add the "publish_status" field with value "published"
+        #json_payload+=",\"publish_status\":\"published\""
         
         # Add optional fields without trailing commas
         [ ! -z "$description" ] && json_payload+=",\"description\":\"$description\""

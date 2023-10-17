@@ -1,0 +1,21 @@
+
+curl -Ls get.konghq.com/quickstart | bash -s -- -e KONG_LICENSE_DATA -a portal-migration
+
+echo "KONG_PORTAL_GUI_HOST=localhost:8003 KONG_PORTAL=on | kong reload exit" docker exec -i portal-migration-gateway /bin/sh
+
+curl -i -X PATCH http://localhost:8001/workspaces/default --data "config.portal=true"
+
+open http://localhost:8003/default
+
+curl 'http://localhost:8001/default/files/ba4200fc-d807-4e35-b00c-ef85fa93c66c' \
+  -X 'DELETE' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: en-US,en;q=0.9'
+
+
+NOTES
+
+TODO: The labels are opinionated about contents, we should probably not add 
+    them unless there is other places in the on-prem dev portal to grab them
+TODO: Linking gateway services to API Product versions? Manual step?
+TODO: Publishing API Product versions?  Manual step?
