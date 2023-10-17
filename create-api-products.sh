@@ -24,6 +24,7 @@ check_product_exists() {
     local escaped_product_name=$(printf "%s" "$product_name" | jq -sRr @uri)
     local url="${URL}/v2/api-products?filter\[name\]=$escaped_product_name"
     local response=$(curl -s -H "Authorization: Bearer ${TOKEN}" -XGET "$url")
+    print "API Call: GET $url" 
     echo "$response" | jq -r ".data[0].id // empty"
 }
 
@@ -32,6 +33,7 @@ check_version_exists() {
     local version_name="$2"
     local url="${URL}/v2/api-products/$product_id/product-versions?filter\[name\]=$version_name"
     local response=$(curl -s -H "Authorization: Bearer ${TOKEN}" -XGET "$url")
+    print "API Call: GET $url" 
     echo "$response" | jq -r ".data[0].id // empty"
 }
 
@@ -42,12 +44,14 @@ manage_product_version() {
     local existing_version_id=$(check_version_exists "$product_id" "$version_name")
     
     if [ -z "$existing_version_id" ]; then
+        local full_url="${URL}/v2/api-products/$product_id/product-versions"
         curl -s -o /dev/null --request POST \
-            --url "${URL}/v2/api-products/$product_id/product-versions" \
+            --url "${full_url}" \
             --header 'Content-Type: application/json' \
             --header 'accept: application/json' \
             --header "Authorization: Bearer ${TOKEN}" \
             --data "{\"name\":\"$version_name\",\"publish_status\":\"published\"}"
+        print "API Call: POST $url" 
         existing_version_id=$(check_version_exists "$product_id" "$version_name")
         print "Created and published new product version ($version_name) with ID: $existing_version_id for product ID: $product_id"
     else
@@ -62,6 +66,7 @@ check_specification_exists() {
     local version_id="$2"
     local url="${URL}/v2/api-products/${product_id}/product-versions/${version_id}/specifications"
     local response=$(curl -s -H "Authorization: Bearer ${TOKEN}" -XGET "$url")
+    print "API Call: GET $url" 
     echo "$response" | jq -r ".data[0].id // empty"
 }
 
@@ -81,6 +86,7 @@ update_or_create_specification() {
             --header 'accept: application/json' \
             --header "Authorization: Bearer ${TOKEN}" \
             --data "{\"content\":\"${file_content_base64}\"}"
+        print "API Call: PATCH $url" 
     else
         print "Creating new specification for API Product Version ${version_id}"
         local url="${URL}/v2/api-products/${product_id}/product-versions/${version_id}/specifications"
@@ -90,6 +96,7 @@ update_or_create_specification() {
             --header 'accept: application/json' \
             --header "Authorization: Bearer ${TOKEN}" \
             --data "{\"name\":\"${file}\",\"content\":\"${file_content_base64}\"}"
+        print "API Call: POST $url" 
     fi
 }
 
@@ -105,6 +112,7 @@ patch_api_product_with_portal_id() {
         --header 'accept: application/json' \
         --header "Authorization: Bearer ${TOKEN}" \
         --data "$payload"
+    print "API Call: PATCH $url" 
         
     print "Published API Product ${product_id} to Portal ${portal_id}"
 }
@@ -120,6 +128,7 @@ publish_product_version() {
         --header 'accept: application/json' \
         --header "Authorization: Bearer ${TOKEN}" \
         --data "$payload"
+    print "API Call: PATCH $url" 
         
     print "Published API Product Version ${version_id}"
 }
@@ -138,15 +147,18 @@ manage_api_product() {
             --header 'accept: application/json' \
             --header "Authorization: Bearer ${TOKEN}" \
             --data "$payload"
+        print "API Call: PATCH $url" 
         print "Patched existing API Product with ID: ${existing_product_id}"
     else
         print "Creating new API Product (${product_name})"
+        local url="${URL}/v2/api-products"
         response=$(curl -s \
             -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
             -d "$payload" \
-            "${URL}/v2/api-products")
+            "${url}")
+        print "API Call: POST $url" 
         existing_product_id=$(echo "$response" | jq -r ".id")
         print "Created new API Product with ID: $existing_product_id"
     fi
